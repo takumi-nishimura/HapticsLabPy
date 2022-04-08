@@ -110,6 +110,10 @@ class PLOT:
 
         plt.pause(0.001)
 
+    def plot_close(self):
+        plt.clf()
+        plt.close()
+
 class KEYINPUT:
     def __init__(self) -> None:
         self.k_flag = 0
@@ -118,20 +122,20 @@ class KEYINPUT:
         sleepflag = 0
         while True:
             kb = input()
-            if kb == 's':
-                print('!!!start!!!')
+            if kb == 'r':
+                print('!!!recording start!!!')
                 if sleepflag == 0:
                     time.sleep(0.8)
                     sleepflag = 1
                 else:
                     pass
                 self.k_flag = 1
+            if kb == 'p':
+                print('!!!playback start!!!')
+                self.k_flag = 2
             if kb == 'q':
                 print('!!!stop!!!')
                 break
-            if kb == 'r':
-                print('---reflesh---')
-                self.k_flag = 2
 
 if __name__ == "__main__":
     search = SEARCH()
@@ -143,7 +147,7 @@ if __name__ == "__main__":
     ki = KEYINPUT()
     kt = threading.Thread(target=ki.input_waiting)
     kt.start()
-    print('s:start')
+    print('r:recording,  p:playback')
 
     while True:
         try:
@@ -157,15 +161,22 @@ if __name__ == "__main__":
                         pl.d2y = ai.amp
                         pl.d3y = ai.vol
                         pl.visualize()
-                        if ki.k_flag == 2:
-                            print('reflesh')
-                            ki.k_flag = 0
-                    except KeyboardInterrupt:
+                    except:
                         ai.stream.stop_stream()
+
                 ai.close()
                 print()
                 print("finish")
+                pl.plot_close()
                 break
+            elif ki.k_flag == 2:
+                print('p')
+                ki.k_flag = 0
+                while kt.is_alive():
+                    try:
+                        print('play')
+                    except KeyboardInterrupt:
+                        break
             else:
                 pass
         except KeyboardInterrupt:
