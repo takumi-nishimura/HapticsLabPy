@@ -1,10 +1,11 @@
 import pyaudio
+import wave
 import numpy as np
 import time
 import threading
 import matplotlib.pyplot as plt
 
-class SEARCH:
+class Search:
     def __init__(self) -> None:
         self.p = pyaudio.PyAudio()
         for i in range(self.p.get_device_count()):
@@ -29,13 +30,14 @@ class SEARCH:
         print(output_index_list)
         return output_index_list
 
-class AUDIOINPUT:
+class AudioInput:
     def __init__(self) -> None:
         self.audio_array = np.array([])
+        self.audio_record = []
 
         self.p = pyaudio.PyAudio()
         self.channels = 1
-        self.rate = 16000
+        self.rate = 44100
         self.CHUNK = 2**12
         self.format = pyaudio.paInt16
         self.stream = self.p.open(
@@ -47,14 +49,24 @@ class AUDIOINPUT:
                         stream_callback=self.callback)
 
     def callback(self, in_data, frame_count, time_info, statuss):
+        self.audio_record.append(in_data)
         self.buffer = np.frombuffer(in_data, dtype='int16')/32768.0
-        self.audio_array = np.append(self.audio_array,self.buffer)
+        self.audio_array = np.append(self.audio_array, self.buffer)
         self.fft()
         self.amp = np.abs(self.F/(self.CHUNK/2))
         self.vol = sum(self.amp[25:128])
         return (in_data, pyaudio.paContinue)
 
+    def record(self):
+        self.waveFile = wave.open('record.wav', 'wb')
+        self.waveFile.setnchannels(1)
+        self.waveFile.setsampwidth(self.p.get_sample_size(self.format))
+        self.waveFile.setframerate(self.rate)
+        self.waveFile.writeframes(b''.join(self.audio_record))
+        self.waveFile.close()
+
     def close(self):
+        self.record()
         self.stream.close()
         self.p.terminate()
 
@@ -62,7 +74,32 @@ class AUDIOINPUT:
         self.freq = np.fft.fftfreq(self.CHUNK, d=1.0/self.rate)
         self.F = np.fft.fft(self.buffer)
 
-class PLOT:
+class AudioOutput:
+    def __init__(self) -> None:
+        self.CHUNK = 2 ** 12
+
+    def play(self):
+        self.ao = wave.open('record.wav', 'rb')
+        self.p = pyaudio.PyAudio()
+
+        self.stream = self.p.open(format=self.p.get_format_from_width(self.ao.getsampwidth()),
+                channels=self.ao.getnchannels(),
+                rate=self.ao.getframerate(),
+                output=True)
+        self.data = self.ao.readframes(self.CHUNK)
+
+        while len(self.data) > 0:
+            self.stream.write(self.data)
+            self.data = self.ao.readframes(self.CHUNK)
+        
+        self.stream.stop_stream()
+        self.stream.close()
+
+        self.p.terminate()
+
+        print('!!!finish!!!')
+
+class Plot:
     def __init__(self,rate,chunk) -> None:
         self.rate = rate
         self.chunk = chunk
@@ -114,7 +151,7 @@ class PLOT:
         plt.clf()
         plt.close()
 
-class KEYINPUT:
+class KeyInput:
     def __init__(self) -> None:
         self.k_flag = 0
 
@@ -125,7 +162,7 @@ class KEYINPUT:
             if kb == 'r':
                 print('!!!recording start!!!')
                 if sleepflag == 0:
-                    time.sleep(0.8)
+                    time.sleep(1)
                     sleepflag = 1
                 else:
                     pass
@@ -138,14 +175,15 @@ class KEYINPUT:
                 break
 
 if __name__ == "__main__":
-    search = SEARCH()
+    search = Search()
 
-    ai = AUDIOINPUT()
+    ai = AudioInput()
+    ao = AudioOutput()
 
-    pl = PLOT(ai.rate,ai.CHUNK)
+    pl = Plot(ai.rate,ai.CHUNK)
 
-    ki = KEYINPUT()
-    kt = threading.Thread(target=ki.input_waiting)
+    ki = KeyInput()
+    kt = threading.Thread(target=ki.input_waiting, daemon=True)
     kt.start()
     print('r:recording,  p:playback')
 
@@ -162,22 +200,15 @@ if __name__ == "__main__":
                         pl.d3y = ai.vol
                         pl.visualize()
                     except:
-                        ai.stream.stop_stream()
-
+                        pass
                 ai.close()
                 print()
                 print("finish")
                 pl.plot_close()
                 break
             elif ki.k_flag == 2:
-                print('p')
                 ki.k_flag = 0
-                while kt.is_alive():
-                    try:
-                        print('play')
-                    except KeyboardInterrupt:
-                        break
-            else:
-                pass
+                ao.play()
+                break
         except KeyboardInterrupt:
             break
