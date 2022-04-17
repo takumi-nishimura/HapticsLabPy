@@ -1,6 +1,3 @@
-from matplotlib import widgets
-
-
 class Human:
     def __init__(self, name, height, weight) -> None:
         self.name = name
